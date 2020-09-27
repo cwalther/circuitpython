@@ -57,6 +57,7 @@
 #include "supervisor/shared/safe_mode.h"
 #include "supervisor/shared/stack.h"
 #include "supervisor/shared/status_leds.h"
+#include "supervisor/shared/traceback.h"
 #include "supervisor/shared/translate.h"
 #include "supervisor/shared/workflow.h"
 #include "supervisor/usb.h"
@@ -216,7 +217,41 @@ STATIC bool maybe_run_list(const char * const * filenames, pyexec_result_t* exec
     return true;
 }
 
-STATIC void cleanup_after_vm(supervisor_allocation* heap) {
+STATIC void count_strn(void *data, const char *str, size_t len) {
+    *(size_t*)data += len;
+}
+
+STATIC void cleanup_after_vm(supervisor_allocation* heap, mp_obj_t exception) {
+    // Get the traceback of any exception from this run off the heap.
+    // MP_OBJ_SENTINEL means "this run does not contribute to traceback storage, don't touch it"
+    // MP_OBJ_NULL (=0) means "this run completed successfully, clear any stored traceback"
+    if (exception != MP_OBJ_SENTINEL) {
+        free_memory(prev_traceback_allocation);
+        // ReloadException is exempt from traceback printing in pyexec_file(), so treat it as "no
+        // traceback" here too.
+        if (exception && exception != MP_OBJ_FROM_PTR(&MP_STATE_VM(mp_reload_exception))) {
+            size_t traceback_len = 0;
+            mp_print_t print_count = {&traceback_len, count_strn};
+            mp_obj_print_exception(&print_count, exception);
+            prev_traceback_allocation = allocate_memory(align32_size(traceback_len + 1), false, true);
+            // Empirically, this never fails in practice - even when the heap is totally filled up
+            // with single-block-sized objects referenced by a root pointer, exiting the VM frees
+            // up several hundred bytes, sufficient for the traceback (which tends to be shortened
+            // because there wasn't memory for the full one). There may be convoluted ways of
+            // making it fail, but at this point I believe they are not worth spending code on.
+            if (prev_traceback_allocation != NULL) {
+                vstr_t vstr;
+                vstr_init_fixed_buf(&vstr, traceback_len, (char*)prev_traceback_allocation->ptr);
+                mp_print_t print = {&vstr, (mp_print_strn_t)vstr_add_strn};
+                mp_obj_print_exception(&print, exception);
+                ((char*)prev_traceback_allocation->ptr)[traceback_len] = '\0';
+            }
+        }
+        else {
+            prev_traceback_allocation = NULL;
+        }
+    }
+
     // Reset port-independent devices, like CIRCUITPY_BLEIO_HCI.
     reset_devices();
     // Turn off the display and flush the filesystem before the heap disappears.
@@ -269,7 +304,7 @@ STATIC bool run_code_py(safe_mode_t safe_mode) {
     pyexec_result_t result;
 
     result.return_code = 0;
-    result.exception_type = NULL;
+    result.exception = MP_OBJ_NULL;
     result.exception_line = 0;
 
     bool skip_repl;
@@ -320,7 +355,7 @@ STATIC bool run_code_py(safe_mode_t safe_mode) {
 
         // TODO: on deep sleep, make sure display is refreshed before sleeping (for e-ink).
 
-        cleanup_after_vm(heap);
+        cleanup_after_vm(heap, result.exception);
 
         // If a new next code file was set, that is a reason to keep it (obviously). Stuff this into
         // the options because it can be treated like any other reason-for-stickiness bit. The
@@ -554,7 +589,8 @@ STATIC void __attribute__ ((noinline)) run_boot_py(safe_mode_t safe_mode) {
         start_mp(heap);
 
         // TODO(tannewt): Re-add support for flashing boot error output.
-        bool found_boot = maybe_run_list(boot_py_filenames, NULL);
+        pyexec_result_t result = {0, MP_OBJ_NULL, 0};
+        bool found_boot = maybe_run_list(boot_py_filenames, &result);
         (void) found_boot;
 
         #ifdef CIRCUITPY_BOOT_OUTPUT_FILE
@@ -565,7 +601,7 @@ STATIC void __attribute__ ((noinline)) run_boot_py(safe_mode_t safe_mode) {
         boot_output_file = NULL;
         #endif
 
-        cleanup_after_vm(heap);
+        cleanup_after_vm(heap, result.exception);
     }
 }
 
@@ -582,7 +618,7 @@ STATIC int run_repl(void) {
     } else {
         exit_code = pyexec_friendly_repl();
     }
-    cleanup_after_vm(heap);
+    cleanup_after_vm(heap, MP_OBJ_SENTINEL);
     autoreload_resume();
     return exit_code;
 }
