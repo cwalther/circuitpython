@@ -33,6 +33,12 @@
 
 #define CIRCUITPY_SUPERVISOR_ALLOC_COUNT (12)
 
+// Use a value different from zero to mark an unused allocation in order to support zero-length
+// allocations. These are probably useless, but rather than trying to guarantee that careless
+// callers aren't going to make any and be unprepared for getting NULL, let's just support them.
+// That costs us 28 bytes of code though (on a SAMD51).
+#define FREE ((uint32_t)-1)
+
 static supervisor_allocation allocations[CIRCUITPY_SUPERVISOR_ALLOC_COUNT];
 // We use uint32_t* to ensure word (4 byte) alignment.
 uint32_t* low_address;
@@ -41,6 +47,9 @@ uint32_t* high_address;
 void memory_init(void) {
     low_address = port_heap_get_bottom();
     high_address = port_heap_get_top();
+    for (int8_t i = 0; i < CIRCUITPY_SUPERVISOR_ALLOC_COUNT; i++) {
+        allocations[i].length = FREE;
+    }
 }
 
 void free_memory(supervisor_allocation* allocation) {
@@ -61,19 +70,23 @@ void free_memory(supervisor_allocation* allocation) {
     }
     if (allocation->ptr == high_address) {
         high_address += allocation->length / 4;
+        allocation->length = FREE;
         for (index++; index < CIRCUITPY_SUPERVISOR_ALLOC_COUNT; index++) {
             if (allocations[index].ptr != NULL) {
                 break;
             }
             high_address += allocations[index].length / 4;
+            allocations[index].length = FREE;
         }
     } else if (allocation->ptr + allocation->length / 4 == low_address) {
         low_address = allocation->ptr;
+        allocation->length = FREE;
         for (index--; index >= 0; index--) {
             if (allocations[index].ptr != NULL) {
                 break;
             }
             low_address -= allocations[index].length / 4;
+            allocations[index].length = FREE;
         }
     } else {
         // Freed memory isn't in the middle so skip updating bounds. The memory will be added to the
@@ -109,7 +122,7 @@ supervisor_allocation* allocate_memory(uint32_t length, bool high) {
         direction = -1;
     }
     for (; index < CIRCUITPY_SUPERVISOR_ALLOC_COUNT; index += direction) {
-        if (allocations[index].ptr == NULL) {
+        if (allocations[index].length == FREE) {
             break;
         }
     }
