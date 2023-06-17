@@ -7,7 +7,7 @@
 
 // This is example 1 script, which will be compiled and executed.
 static const char *example_1 =
-    "print('hello world!', list(x + 1 for x in range(10)), end='eol\\n')";
+    "print('hello world!', [x + 1 for x in range(32)], end='eol\\n')";
 
 // This is example 2 script, which will be compiled and executed.
 static const char *example_2 =
@@ -23,6 +23,40 @@ static const char *example_2 =
     "print('run GC collect')\n"
     "gc.collect()\n"
     "\n"
+    "def f(x):\n"
+    "    print('hello world!', 'f', x)\n"
+    "def g(x):\n"
+    "    print('hello world!', 'g', x)\n"
+    "def h(x):\n"
+    "    print('hello world!', 'h', x)\n"
+    "def i(x):\n"
+    "    print('hello world!', 'i', x)\n"
+    "def j(x):\n"
+    "    print('hello world!', 'j', x)\n"
+    "def k(x):\n"
+    "    print('hello world!', 'k', x)\n"
+    "def l(x):\n"
+    "    print('hello world!', 'l', x)\n"
+    "f(1)\n"
+    "f(2)\n"
+    "f(3)\n"
+    "f(4)\n"
+    "f(5)\n"
+    "f(6)\n"
+    "f(7)\n"
+    "f(8)\n"
+    "f(9)\n"
+    "f(10)\n"
+    "f(11)\n"
+    "f(12)\n"
+    "f(13)\n"
+    "f(14)\n"
+    "f(15)\n"
+    "f(16)\n"
+    "f(17)\n"
+    "f(18)\n"
+    "f(19)\n"
+    "f(20)\n"
     "print('finish')\n"
     ;
 

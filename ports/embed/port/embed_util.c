@@ -25,6 +25,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 #include "py/compile.h"
 #include "py/gc.h"
 #include "py/persistentcode.h"
@@ -48,9 +49,13 @@ void mp_embed_exec_str(const char *src) {
         // Compile, parse and execute the given string.
         mp_lexer_t *lex = mp_lexer_new_from_str_len(MP_QSTR__lt_stdin_gt_, src, strlen(src), 0);
         qstr source_name = lex->source_name;
+    	printf("PARSE\n");
         mp_parse_tree_t parse_tree = mp_parse(lex, MP_PARSE_FILE_INPUT);
+    	printf("COMPILE\n");
         mp_obj_t module_fun = mp_compile(&parse_tree, source_name, true);
+    	printf("RUN\n");
         mp_call_function_0(module_fun);
+    	printf("DONE\n");
         nlr_pop();
     } else {
         // Uncaught exception: print it out.
@@ -87,6 +92,7 @@ void mp_embed_deinit(void) {
 #if MICROPY_ENABLE_GC
 // Run a garbage collection cycle.
 void gc_collect(void) {
+	printf("COLLECT\n");
     gc_collect_start();
     gc_helper_collect_regs_and_stack();
     gc_collect_end();
