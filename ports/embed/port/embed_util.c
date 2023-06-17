@@ -36,7 +36,6 @@
 
 // Initialise the runtime.
 void mp_embed_init(void *gc_heap, size_t gc_heap_size) {
-    mp_stack_ctrl_init();
     gc_init(gc_heap, (uint8_t *)gc_heap + gc_heap_size);
     mp_init();
 }

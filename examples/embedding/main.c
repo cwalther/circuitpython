@@ -4,6 +4,7 @@
  */
 
 #include "port/micropython_embed.h"
+#include "py/stackctrl.h"
 
 // This is example 1 script, which will be compiled and executed.
 static const char *example_1 =
@@ -65,6 +66,7 @@ static char heap[8 * 1024];
 
 int main() {
     // Initialise MicroPython.
+    mp_stack_ctrl_init();
     mp_embed_init(&heap[0], sizeof(heap));
 
     // Run the example scripts (they will be compiled first).
